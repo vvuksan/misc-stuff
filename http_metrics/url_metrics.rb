@@ -23,6 +23,7 @@
 ########################################################################################
 require 'net/http'
 require 'socket'
+require 'openssl'
 require "base64"
 require 'getoptlong'
 
@@ -99,8 +100,8 @@ end
 
 times = {}
 
-if url.scheme == "http"
-  
+if url.scheme == "http" or url.scheme == "https"
+    
     times["beforedns"] = Time.now
     name = TCPSocket.gethostbyname(url.host)
     times["afterdns"] = Time.now
@@ -108,6 +109,16 @@ if url.scheme == "http"
     times["beforeopen"] = Time.now
     socket = TCPSocket.open(url.host, url.port)
     times["afteropen"] = Time.now
+    
+    if url.scheme == "https"
+      times["beforessl"] = Time.now
+      ssl_context = OpenSSL::SSL::SSLContext.new()
+      ssl_socket = OpenSSL::SSL::SSLSocket.new(socket, ssl_context)
+      ssl_socket.sync_close = true
+      ssl_socket.connect
+      socket = ssl_socket
+      times["afterssl"] = Time.now
+    end
 
     socket.print("GET #{url.request_uri} HTTP/1.0\r\nHost: #{url.host}\r\n#{addl_http_header}User-Agent: Webtester\r\nAccept: */*\r\nConnection: close\r\n\r\n")
     times["afterrequest"] = Time.now
@@ -125,13 +136,14 @@ if url.scheme == "http"
     times["end"] = Time.now
 
     lookuptime = times["afterdns"] - times["beforedns"]
+    ssltime = times["afterssl"] - times["beforessl"] if url.scheme == "https"
     connectime = times["afteropen"] - times["beforeopen"]
     prexfertime = times["afterrequest"] - times["afteropen"]
     startxfer = times["firstline"] - times["afterrequest"]
     txtime = times["end"] - times["firstline"]
     bytesfetched = response.join.length
     totaltime = times["end"] - times["beforedns"]
-
+  
 else
     puts "Unsupported url scheme: #{url.scheme}. Only supported scheme currently is http."
     exit(1)
@@ -143,6 +155,7 @@ if send_to_ganglia
     
     system "#{gmetric_cmd} -u secs -n #{metric_prefix}_dns_lookuptime -v #{lookuptime}"
     system "#{gmetric_cmd} -u secs -n #{metric_prefix}_time_to_connect -v #{connectime}"    
+    system "#{gmetric_cmd} -u secs -n #{metric_prefix}_time_to_ssl -v #{ssltime}"  if url.scheme == "https"
     system "#{gmetric_cmd} -u secs -n #{metric_prefix}_time_to_send_req -v #{prexfertime}"
     system "#{gmetric_cmd} -u secs -n #{metric_prefix}_time_to_first_byte -v #{startxfer}"
     system "#{gmetric_cmd} -u secs -n #{metric_prefix}_time_to_fetch_response -v #{txtime}"
@@ -153,6 +166,7 @@ else
     
     puts "DNS Lookup Time = #{lookuptime} secs"
     puts "Time to connect = #{connectime} secs"
+    puts "Time to negotiate SSL = #{ssltime} secs"  if url.scheme == "https"
     puts "Time to send request = #{prexfertime} secs"
     puts "Time between request sent and first line of response = #{startxfer} secs"
     puts "Time to fetch response = #{txtime} secs"
