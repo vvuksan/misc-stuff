@@ -133,10 +133,9 @@ if url.scheme == "http"
     totaltime = times["end"] - times["beforedns"]
 
 else
-    reply.fail "Unsupported url scheme: #{url.scheme}. Only supported scheme currently is http."
-    return
+    puts "Unsupported url scheme: #{url.scheme}. Only supported scheme currently is http."
+    exit(1)
 end
-
 
 if send_to_ganglia
 
