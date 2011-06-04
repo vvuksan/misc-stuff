@@ -151,7 +151,7 @@ end
 
 if send_to_ganglia
 
-    gmetric_cmd = "echo gmetric -t float -d 720"
+    gmetric_cmd = "gmetric -t float -d 720"
     
     system "#{gmetric_cmd} -u secs -n #{metric_prefix}_dns_lookuptime -v #{lookuptime}"
     system "#{gmetric_cmd} -u secs -n #{metric_prefix}_time_to_connect -v #{connectime}"    
