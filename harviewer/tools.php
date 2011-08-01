@@ -47,9 +47,19 @@ function generate_waterfall($har) {
             "duration" => $request_duration, "size" => $resp_size, "resp_code" => $resp_code );
         
     }
+
+    // If min_start_time is unchanged from original there was an error and
+    // HAR file was invalid.
+    if ( $min_start_time == 10000000000 ) {
+        print "<h1>Error</h1><p><PRE>";
+        print_r($har);
+        exit(1);
+    }
     
     # Total time to fetch the page and all resources
     $total_time = $max_end_time - $min_start_time;
+
+    
     
     $haroutput = '
     <table class="harview">
@@ -100,6 +110,16 @@ function get_har($url) {
     global $conf;
     exec("export DISPLAY=:1; " . $conf['phantomjs_exec'] . " " . $url, $output_array, $ret_value);
     
+    # For some reason you may get DEBUG statements in the output e.g.  ** (:32751): DEBUG: NP_Initialize\
+    # Let's get rid of them
+    foreach ( $output_array as $key => $line ) {
+        if ( preg_match("/{/", $line) ) {
+            break;
+        } else
+            $output_array[$key] = "";
+
+    }
+
     // Phantom JS exited normally. It doesn't mean URL properly loaded
     if ( $ret_value == 0 ) {
         $output = join("\n", $output_array);
