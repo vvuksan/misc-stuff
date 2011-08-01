@@ -28,13 +28,26 @@ function getTimings() {
 </script>
 </head>
 <body>
+<div id="tabs">
+    <ul>
+	<li><a href="#tab-waterfall">Waterfall</a></li>
+    </ul>
+
+<div id="tab-waterfall">
 <div id=header>
 <form id="query_form">
 URL <input name="url" size=60>
-<button onclick="getTimings(); return false;">Get timings</button>
+<button id="query_button" onclick="getTimings(); return false;">Get timings</button>
 </form>
 </div>
 <div id=results>
 </div>
+</div>
+<script>
+$(function(){
+    $("#tabs").tabs();
+    $("#query_button").button();
+});
+</script>
 </body>
 </html>
