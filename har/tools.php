@@ -1,0 +1,111 @@
+<?php
+
+require_once('./conf.php');
+
+// Let's make sure there is http at the front of a URL
+function validate_url($url) {
+    if ( !preg_match("/^http/", $url) )
+        $url = "http://" . $url;
+ 
+    return $url;
+    
+}
+
+
+function generate_waterfall($har) {
+
+    # This variable will keep the start time of the whole request chain.
+    $min_start_time = 10000000000;
+    
+    # When did the page load finish
+    $max_end_time = 0;
+    
+    foreach ( $har['log']['entries'] as $key => $request ) {
+        
+        $started_time = $request['startedDateTime'];
+        $request_duration = $request['time'] / 1000;
+        $url = $request['request']['url'];
+        $resp_code = intval($request['response']['status']);
+        $resp_size = floatval($request['response']['bodySize']);
+        
+        // Extract the milliseconds since strtotime doesn't seem to retain it
+        preg_match("/(.*)T(.*)\.(.*)(Z)/", $started_time, $out);
+        $milli = $out[3];
+    
+        $start_time = floatval(strtotime($started_time) . "." . $milli);
+        $end_time = $start_time + $request_duration;
+    
+        # Trying to find the start time of the first request
+        if ( $start_time < $min_start_time )
+            $min_start_time = $start_time;
+    
+        # Find out when the last request ended
+        if ( $end_time > $max_end_time )
+            $max_end_time = $end_time;
+    
+        $requests[] = array("url" => $url, "start_time" => $start_time,
+            "duration" => $request_duration, "size" => $resp_size, "resp_code" => $resp_code );
+        
+    }
+    
+    # Total time to fetch the page and all resources
+    $total_time = $max_end_time - $min_start_time;
+    
+    $haroutput = '
+    <table class="harview">
+    <tr>
+    <td colspan=5 align=center>
+    Total time for a fully downloaded page is ' . sprintf("%.3f", $total_time) . ' sec
+    </td>
+    </tr>
+        <tr>
+            <th>URL</th>
+            <th>Resp Code</th>
+            <th>Duration</th>
+            <th>Size (bytes)</th>
+            <th></th>
+        </tr>'
+    ;
+    
+    foreach ( $requests as $key => $request ) {
+    
+        $time_offset = $request["start_time"] - $min_start_time;
+        
+        $white_space = ($time_offset / $total_time) * 100;
+        $progress_bar = ($request["duration"] / $total_time) * 100;
+        
+        $haroutput .= "\n<tr><td><a href='" . $request["url"] . "'>" . substr($request["url"],0,50) . '</a></td>' . '
+        <td>' . $request["resp_code"] . '</td>
+        <td>' . $request["duration"] . '</td>
+        <td>' . $request["size"] . '</td>
+        <td><span class="bar">' .
+        '<span class="fill" style="background: white; width: ' . $white_space .  '%">&nbsp;</span>'.
+        '<span class="fill" style="background: #AAB2FF; width: ' . $progress_bar .  '%">&nbsp;</span>'.
+        "</span></td></tr>";
+    
+    }
+    
+    unset($requests);
+    unset($har);
+    
+    $haroutput .= "</table>";
+
+    return $haroutput;
+
+} // end of function generate_waterfall()
+
+
+function get_har($url) {
+
+    global $conf;
+    exec("export DISPLAY=:1; " . $conf['phantomjs_exec'] . " " . $url, $output_array, $ret_value);
+    
+    // Phantom JS exited normally. It doesn't mean URL properly loaded
+    if ( $ret_value == 0 ) {
+        $output = join("\n", $output_array);
+        return $output;
+    }
+
+}
+
+?>
