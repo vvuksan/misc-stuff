@@ -34,6 +34,7 @@ opts = GetoptLong.new(
     [ '--password', '-p', GetoptLong::OPTIONAL_ARGUMENT ],
     [ '--ganglia', '-g', GetoptLong::OPTIONAL_ARGUMENT ],
     [ '--metric_prefix', '-m', GetoptLong::OPTIONAL_ARGUMENT ],
+    [ '--ip', '-i', GetoptLong::OPTIONAL_ARGUMENT ],
     [ '--help', '-h', GetoptLong::OPTIONAL_ARGUMENT ]
 )
 
@@ -44,6 +45,7 @@ def showhelp()
     puts "   --password/-p        Password for Basic Authentication"
     puts "   --ganglia/-g         Send to Ganglia"
     puts "   --metric_prefix/-m   Metric Prefix to use for Ganglia ie. url_google. Defaults to url"
+    puts "   --ip/-i	 	Overrides IP to connect to in case you are testing. Override DNS resolution"
     puts "   --help/-h            Show this help"
 end
 
@@ -52,6 +54,7 @@ username = nil
 password = nil
 help = nil
 send_to_ganglia = nil
+ip = nil
 metric_prefix = "url"
 
 begin
@@ -67,6 +70,8 @@ begin
               send_to_ganglia = 1
             when "--metric_prefix"
               metric_prefix = arg
+            when "--ip"
+              ip = arg
             when "--help"
 	      help = 1
         end
@@ -101,13 +106,19 @@ end
 times = {}
 
 if url.scheme == "http" or url.scheme == "https"
-    
-    times["beforedns"] = Time.now
-    name = TCPSocket.gethostbyname(url.host)
-    times["afterdns"] = Time.now
+
+    if ! ip
+        times["beforedns"] = Time.now
+        name = TCPSocket.gethostbyname(url.host)
+        times["afterdns"] = Time.now
+    end
 
     times["beforeopen"] = Time.now
-    socket = TCPSocket.open(url.host, url.port)
+    if ! ip
+        socket = TCPSocket.open(url.host, url.port)
+    else
+        socket = TCPSocket.open(ip, url.port)
+    end
     times["afteropen"] = Time.now
     
     if url.scheme == "https"
@@ -135,14 +146,20 @@ if url.scheme == "http" or url.scheme == "https"
 
     times["end"] = Time.now
 
-    lookuptime = times["afterdns"] - times["beforedns"]
+    if ! ip 
+        lookuptime = times["afterdns"] - times["beforedns"]
+    end
     ssltime = times["afterssl"] - times["beforessl"] if url.scheme == "https"
     connectime = times["afteropen"] - times["beforeopen"]
     prexfertime = times["afterrequest"] - times["afteropen"]
     startxfer = times["firstline"] - times["afterrequest"]
     txtime = times["end"] - times["firstline"]
     bytesfetched = response.join.length
-    totaltime = times["end"] - times["beforedns"]
+    if ! ip
+        totaltime = times["end"] - times["beforedns"]
+    else
+	totaltime = times["end"] - times["beforeopen"]
+    end
   
 else
     puts "Unsupported url scheme: #{url.scheme}. Only supported scheme currently is http."
@@ -153,7 +170,9 @@ if send_to_ganglia
 
     gmetric_cmd = "gmetric -t float -d 720"
     
-    system "#{gmetric_cmd} -u secs -n #{metric_prefix}_dns_lookuptime -v #{lookuptime}"
+    if ! ip
+        system "#{gmetric_cmd} -u secs -n #{metric_prefix}_dns_lookuptime -v #{lookuptime}"
+    end
     system "#{gmetric_cmd} -u secs -n #{metric_prefix}_time_to_connect -v #{connectime}"    
     system "#{gmetric_cmd} -u secs -n #{metric_prefix}_time_to_ssl -v #{ssltime}"  if url.scheme == "https"
     system "#{gmetric_cmd} -u secs -n #{metric_prefix}_time_to_send_req -v #{prexfertime}"
@@ -164,7 +183,9 @@ if send_to_ganglia
 
 else
     
-    puts "DNS Lookup Time = #{lookuptime} secs"
+    if ! ip
+        puts "DNS Lookup Time = #{lookuptime} secs"
+    end
     puts "Time to connect = #{connectime} secs"
     puts "Time to negotiate SSL = #{ssltime} secs"  if url.scheme == "https"
     puts "Time to send request = #{prexfertime} secs"
