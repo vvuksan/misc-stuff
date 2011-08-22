@@ -151,7 +151,12 @@ if url.scheme == "http" or url.scheme == "https"
     end
     ssltime = times["afterssl"] - times["beforessl"] if url.scheme == "https"
     connectime = times["afteropen"] - times["beforeopen"]
-    prexfertime = times["afterrequest"] - times["afteropen"]
+    if url.scheme == "https"
+	prexfertime = times["afterrequest"] - times["afterssl"]
+    else
+	prexfertime = times["afterrequest"] - times["afteropen"]
+    end
+    
     startxfer = times["firstline"] - times["afterrequest"]
     txtime = times["end"] - times["firstline"]
     bytesfetched = response.join.length
