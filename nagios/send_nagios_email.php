@@ -7,6 +7,8 @@ $debug = 0;
 
 require_once($current_dir . "/tools.php");
 
+$conf['from_address'] = "<nagios@nagios.com>";
+
 // Parse the command line arguments
 $cmds = commandline_arguments($argv);
 
@@ -60,9 +62,8 @@ $subject = "** " . $cmds['type'] . " Service Alert: " . $cmds['host'] . "/" .
 
 $message = '<html>
   <body bgcolor="#DCEEFC">
-    <h3>****** Nagios *****</h3><br />
+    <h3>****** Nagios *****</h3>
     ';
- 
 // Do we have any matching events   
 if ( sizeof($matching_events) > 0 ) {
     
