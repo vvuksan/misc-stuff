@@ -58,7 +58,7 @@ class ganglia-server {
     [ ganglia-gmond, ganglia-gmond-modules-python ] : ensure => latest;
   }
 
-  $deaf_yesno = "yes";
+  $deaf_yesno = "no";
   $ganglia_cluster_name = "Prod"
   $ganglia_port = 8649
   $ganglia_send_metadata_interval = 60
