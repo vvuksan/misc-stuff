@@ -1,19 +1,50 @@
 <?
 
 $current_dir = dirname(__FILE__); 
-$conf['overlay_events_file'] = "/var/lib/ganglia/conf/events.json";
-
 $debug = 0;
 
 require_once($current_dir . "/tools.php");
 
-$conf['from_address'] = "<nagios@nagios.com>";
+#
+$conf['overlay_events_file'] = "/var/lib/ganglia/conf/events.json";
+$conf['from_address'] = "Nagios <nagios@domain.com>";
+$conf['nagios_bot_host'] = "127.0.0.1";
+$conf['nagios_bot_port'] = 3843;
 
 // Parse the command line arguments
 $cmds = commandline_arguments($argv);
 
-# command --type="$NOTIFICATIONTYPE" --servicedesc="$SERVICEDESC$" --host="$HOSTALIAS$" --hostaddress="$HOSTADDRESS$"
-# --servicestate="$SERVICESTATE$"   --email="$CONTACTEMAIL$" --time="$LONGDATETIME" --additionalinfo="$SERVICEOUTPUT$"
+#########################################################################################################################
+# These are the proper command line invocations for Nagios/Icinga
+#
+# Service alert command
+#
+# command_line	/usr/bin/php /opt/icinga/send_nagios_email.php --type="$NOTIFICATIONTYPE$" --servicedesc="$SERVICEDESC$" -
+#-host="$HOSTALIAS$" --hostaddress="$HOSTADDRESS$" --servicestate="$SERVICESTATE$"   --email="$CONTACTEMAIL$" 
+# --time="$LONGDATETIME$" --additionalinfo="$SERVICEOUTPUT$"
+
+# Host alert command
+# 
+# command_line	/usr/bin/php /opt/icinga/send_nagios_email.php --type="$NOTIFICATIONTYPE" --host="$HOSTNAME" 
+# --hostaddress="$HOSTADDRESS$" --additionalinfo="$HOSTOUTPUT$" --time="$LONGDATETIME" --email="$CONTACTEMAIL$"
+# --hoststate="$HOSTSTATE$"
+
+
+# Send to IRC if configured
+if ( isset($conf['nagios_bot_host']) && isset($conf['nagios_bot_port'])) {
+
+  $fp = fsockopen("udp://" . $conf['nagios_bot_host'], $conf['nagios_bot_port'], $errno, $errstr);
+  if ( $fp) {
+    if ( isset($cmds['servicestate'] )) 
+      fwrite($fp, "service||~||" . $cmds['type'] . "||~||" . $cmds['host']  . "||~||" .$cmds['servicedesc'] 
+      . "||~||" . $cmds['additionalinfo']);
+    else
+      fwrite($fp, "host||~||" . $cmds['type'] . "||~||" . $cmds['host']  . "||~||" . $cmds['hoststate'] . "||~||" . $cmds['additionalinfo']);
+
+  }
+  fclose($fp);
+
+}
 
 $matching_events = array();
 
@@ -57,13 +88,22 @@ if ( isset($conf['overlay_events_file'] )) {
     
 } // end of if ( isset($conf['overlay_events']) {
 
-$subject = "** " . $cmds['type'] . " Service Alert: " . $cmds['host'] . "/" .
-    $cmds['servicedesc'] . " is " . $cmds['servicestate'] . " **";
+
+///////////////////////////////////////////////////////////////////////////////
+// Set proper subject
+///////////////////////////////////////////////////////////////////////////////
+if ( isset($cmds['servicestate'] )) {
+  $subject = $cmds['type'] . " SVC: " . $cmds['host'] . "/" .
+      $cmds['servicedesc'] . " is " . $cmds['servicestate'] . " **";
+} else {
+  $subject = $cmds['type'] . " HOST: " . $cmds['host'] . " is " . $cmds['hoststate'];
+}
 
 $message = '<html>
   <body bgcolor="#DCEEFC">
-    <h3>****** Nagios *****</h3>
+    <h3>****** Alerter *****</h3><br />
     ';
+ 
 // Do we have any matching events   
 if ( sizeof($matching_events) > 0 ) {
     
@@ -94,8 +134,10 @@ if ( sizeof($matching_events) > 0 ) {
     
 }
 
-$message .= '
-<p>
+if ( isset($cmds['servicestate'] )) {
+
+  $message .= '
+  <p>
     <table border=1>
         <tr><th>Notification Type:</th><td>' . $cmds['type'] . '</td></tr>        
         <tr><th>Service:</th><td>' . $cmds['servicedesc'] . '</td></tr>
@@ -103,6 +145,19 @@ $message .= '
         <tr><th>Date/Time:</th><td>' . $cmds['time'] . '</td></tr>
         <tr><th>Additional Info:</th><td>' . $cmds['additionalinfo'] . '</td></tr>
     </table>';
+
+} else {
+
+  $message .= '
+  <p>
+    <table border=1>
+        <tr><th>Notification Type:</th><td>' . $cmds['type'] . '</td></tr>        
+        <tr><th>Host (IP):</th><td>' . $cmds['host'] . '(' . $cmds['hostaddress'] . ')</td></tr>
+        <tr><th>Date/Time:</th><td>' . $cmds['time'] . '</td></tr>
+        <tr><th>Additional Info:</th><td>' . $cmds['additionalinfo'] . '</td></tr>
+    </table>';
+
+}
 
 $message .= '</body>
 </html>
