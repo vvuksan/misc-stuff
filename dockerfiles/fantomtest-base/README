@@ -1,0 +1,6 @@
+Fantomtest Base Docker Image
+============================
+
+Bases itself off nginx-fpm image and reconfigures itself to enable
+compression. Meant as a way to reduce build time of fantomtest image
+since that is the one likely to change a lot more often
